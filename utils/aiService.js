@@ -1,34 +1,18 @@
-import { GoogleGenAI } from "@google/genai";
+// 
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 let client = null;
-const getClient=()=>{
-    if(client) return client;
-    const key = process.env.GEMINI_API_KEY;
-    if(!key) return null;
-    client = new GoogleGenAI({apiKey: key});
-    return client;
+const getClient = () => {
+  if (client) return client;
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  client = new GoogleGenerativeAI(key);
+  return client;
 };
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL || "models/gemini-2.5-flash";
 
-export const isAIEnabled = () => !!process.env.GEMINI_API_KEY;
-
-export const parseJSON = (text) => {
-    let cleaned = (text || "").trim();
-    if(cleaned.startsWith("```json")) {
-        cleaned = cleaned.replace(/```json\n?/g, "").replace(/```\n?$/g, "");
-    }
-    else if(cleaned.startsWith("```")) {
-        cleaned = cleaned.replace(/```\n?/g, "");
-    }
-    return JSON.parse(cleaned.trim());
-};
-
-export const chatCompletion = async ({
-  system,
-  user,
-  temperature = 0.7,
-}) => {
+export const chatCompletion = async ({ system, user, temperature = 0.7 }) => {
   const c = getClient();
 
   if (!c) {
@@ -40,28 +24,34 @@ export const chatCompletion = async ({
   }
 
   try {
-    const res = await c.models.generateContent({
-      model: MODEL,
-      contents: user,
-      config: {
-        systemInstruction: system,
-        temperature,
-      },
+    const model = c.getGenerativeModel({ model: MODEL });
+
+    const res = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: user }],
+        },
+      ],
+      systemInstruction: { role: "system", parts: [{ text: system }] },
+      generationConfig: { temperature },
     });
+
+    const content = res.response?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     return {
       ok: true,
-      content: (res.text || "").trim(),
+      content: content.trim(),
     };
   } catch (err) {
-    console.error("AI error:", err.message);
-
+    console.error("Gemini API error:", err.response?.data || err.message);
     return {
       ok: false,
       content: "AI request failed. Please try again later.",
     };
   }
 };
+
 
 export const SYSTEM_PROMPTS = {
   weekly:
